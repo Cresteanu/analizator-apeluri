@@ -924,7 +924,7 @@ total_talk_minutes: parseFloat((s.totalSeconds / 60).toFixed(2)),      paycheck:
                       <DetailRow label="Total Apeluri" value={selectedDay.total_calls} />
                       <DetailRow label="Efectuate" value={selectedDay.completed_calls} />
                       <DetailRow label="Ratate" value={selectedDay.missed_calls} />
-                      <DetailRow label="Timp Vorbit" value={`${selectedDay.total_talk_minutes} min`} />
+                      <DetailRow label="Timp Vorbit" value={formatDuration(selectedDay.total_talk_minutes * 60)} />
                       <div className="border-t border-slate-200 pt-3">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-semibold text-slate-700">De plată</span>
