@@ -19,7 +19,7 @@ export default function CallLogAnalyzer() {
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [notification, setNotification] = useState(null);
-  const [activeTab, setActiveTab] = useState('upload');
+  const [activeTab, setActiveTab] = useState('calendar');
   const [calendarData, setCalendarData] = useState({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
@@ -109,7 +109,7 @@ export default function CallLogAnalyzer() {
     const byNumber = {};
     completed.forEach(l => { byNumber[l.number] = (byNumber[l.number] || 0) + 1; });
     return {
-      totalCalls: logsData.length,
+totalCalls: completed.length + uniqueMissed,
       missedCalls: uniqueMissed,
       completedCount: completed.length,
       totalSeconds: completed.reduce((s, l) => s + l.duration, 0),
@@ -197,8 +197,7 @@ export default function CallLogAnalyzer() {
         `Total apeluri: ${stats.totalCalls}`,
         `Efectuate: ${stats.completedCount}`,
         `Ratate (unice): ${stats.missedCalls}`,
-        `Timp vorbit: ${stats.totalMinutes} min`,
-        `Apeluri duble: ${stats.doubleCalls}`,
+`Timp vorbit: ${formatDuration(stats.totalSeconds)}`,        `Apeluri duble: ${stats.doubleCalls}`,
       ].forEach(t => { doc.text(t, 25, y); nl(); });
 
       nl();
@@ -250,11 +249,10 @@ export default function CallLogAnalyzer() {
 
     const { error: summaryError } = await supabase.from('daily_earnings').upsert({
       date: saveDate,
-      total_calls: s.totalCalls,
+total_calls: s.completedCount + s.missedCalls,
       completed_calls: s.completedCount,
       missed_calls: s.missedCalls,
-      total_talk_minutes: s.totalMinutes,
-      paycheck: s.totalPaycheck,
+total_talk_minutes: parseFloat((s.totalSeconds / 60).toFixed(2)),      paycheck: s.totalPaycheck,
     }, { onConflict: 'date' });
 
     if (summaryError) {
@@ -403,7 +401,7 @@ export default function CallLogAnalyzer() {
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(22);
-      doc.text('RAPORT SALARIU', margin, 20);
+      doc.text('Raport de Plata', margin, 20);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       doc.text(`Perioada: ${formatDate(exportFrom)}  -  ${formatDate(exportTo)}`, margin, 32);
@@ -446,7 +444,7 @@ export default function CallLogAnalyzer() {
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.text('TOTAL SALARIU', margin + 6, y + 11);
+      doc.text('TOTAL PLATA', margin + 6, y + 11);
       doc.setFontSize(16);
       doc.text(`${totalPaycheck.toFixed(2)} LEI`, pw - margin - 6, y + 11, { align: 'right' });
       doc.setFont('helvetica', 'normal');
@@ -472,14 +470,14 @@ export default function CallLogAnalyzer() {
 
       const drawTableHeader = () => {
         doc.setFillColor(30, 64, 175);
-        doc.rect(tL, y - 5, tW, rowH, 'F');
+        doc.rect(tL, y - 6, tW, 11, 'F');
         doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
         colDefs.forEach(col => {
           const cx = tL + col.x;
           if (col.align === 'right') doc.text(col.label, cx + col.w - 2, y, { align: 'right' });
           else doc.text(col.label, cx + 2, y);
         });
-        y += 5;
+        y += 7;
       };
 
       drawTableHeader();
@@ -488,13 +486,20 @@ export default function CallLogAnalyzer() {
         checkY(rowH + 2);
         if (y === margin) drawTableHeader();
         doc.setFillColor(idx % 2 === 0 ? 248 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
-        doc.rect(tL, y - 5, tW, rowH, 'F');
+        doc.rect(tL, y - 6, tW, 11, 'F');
         doc.setDrawColor(225, 228, 232);
         doc.line(tL, y + 2, tR, y + 2);
 
         [
           formatDate(row.date), String(row.total_calls), String(row.completed_calls),
-          String(row.missed_calls), parseFloat(row.total_talk_minutes).toFixed(1),
+          String(row.missed_calls),(() => {
+  const totalSec = parseFloat(row.total_talk_minutes) * 60;
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+})(),
           `${parseFloat(row.paycheck).toFixed(2)} lei`,
         ].forEach((cell, i) => {
           const col = colDefs[i]; const cx = tL + col.x;
@@ -518,7 +523,14 @@ export default function CallLogAnalyzer() {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
 
       ['TOTAL', String(totalCalls), String(totalCompleted), String(totalMissed),
-        totalTalkMinutes.toFixed(1), `${totalPaycheck.toFixed(2)} lei`].forEach((cell, i) => {
+       (() => {
+  const totalSec = totalTalkMinutes * 60;
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+})(), `${totalPaycheck.toFixed(2)} lei`].forEach((cell, i) => {
           const col = colDefs[i]; const cx = tL + col.x;
           doc.setTextColor(i === 5 ? 21 : 30, i === 5 ? 128 : 64, i === 5 ? 61 : 175);
           if (col.align === 'right') doc.text(cell, cx + col.w - 2, y, { align: 'right' });
@@ -603,7 +615,7 @@ export default function CallLogAnalyzer() {
           <div className="flex items-center gap-3">
             <Phone className="w-7 h-7 text-blue-600" />
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Pontare Apeluri</h1>
+              <h1 className="text-xl font-bold text-slate-900">Portal Pontare Apeluri</h1>
               <p className="text-slate-400 text-xs">Incarca · Analizeaza · Urmareste castigurile</p>
             </div>
           </div>
@@ -617,8 +629,9 @@ export default function CallLogAnalyzer() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-1">
           {[
+             { id: 'calendar', label: 'Calendar Castiguri' },
             { id: 'upload', label: 'Incarcare si Analiza' },
-            { id: 'calendar', label: 'Calendar Castiguri' },
+           
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors
@@ -826,62 +839,7 @@ export default function CallLogAnalyzer() {
         {activeTab === 'calendar' && (
           <div className="space-y-6">
 
-            {/* Export PDF */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-bold text-slate-900 mb-1">Exporta Raport Salariu</h3>
-              <p className="text-sm text-slate-500 mb-4">Alege perioada pentru care vrei sa generezi raportul de plata</p>
-              <div className="flex flex-wrap gap-3 items-end">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">De la</label>
-                  <input type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
-                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Pana la</label>
-                  <input type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
-                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    {
-                      label: 'Luna aceasta', fn: () => {
-                        const now = new Date();
-                        setExportFrom(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
-                        setExportTo(new Date().toISOString().split('T')[0]);
-                      }
-                    },
-                    {
-                      label: 'Luna trecuta', fn: () => {
-                        const now = new Date();
-                        const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                        const end = new Date(now.getFullYear(), now.getMonth(), 0);
-                        setExportFrom(last.toISOString().split('T')[0]);
-                        setExportTo(end.toISOString().split('T')[0]);
-                      }
-                    },
-                    {
-                      label: 'Ultimele 7 zile', fn: () => {
-                        const to = new Date(), from = new Date();
-                        from.setDate(from.getDate() - 6);
-                        setExportFrom(from.toISOString().split('T')[0]);
-                        setExportTo(to.toISOString().split('T')[0]);
-                      }
-                    },
-                  ].map(btn => (
-                    <button key={btn.label} onClick={btn.fn}
-                      className="px-3 py-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors">
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-
-                <button onClick={exportCalendarPDF} disabled={isExporting || !exportFrom || !exportTo}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
-                  {isExporting ? 'Se genereaza...' : 'Exporta PDF'}
-                </button>
-              </div>
-            </div>
+           
 
             {/* Calendar + detalii */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -998,6 +956,63 @@ export default function CallLogAnalyzer() {
                 )}
               </div>
 
+            </div>
+
+             {/* Export PDF */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h3 className="font-bold text-slate-900 mb-1">Exporta Raport Plată</h3>
+              <p className="text-sm text-slate-500 mb-4">Alege perioada pentru care vrei sa generezi raportul de plată</p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">De la</label>
+                  <input type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Pana la</label>
+                  <input type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    {
+                      label: 'Luna aceasta', fn: () => {
+                        const now = new Date();
+                        setExportFrom(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
+                        setExportTo(new Date().toISOString().split('T')[0]);
+                      }
+                    },
+                    {
+                      label: 'Luna trecuta', fn: () => {
+                        const now = new Date();
+                        const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        const end = new Date(now.getFullYear(), now.getMonth(), 0);
+                        setExportFrom(last.toISOString().split('T')[0]);
+                        setExportTo(end.toISOString().split('T')[0]);
+                      }
+                    },
+                    {
+                      label: 'Ultimele 7 zile', fn: () => {
+                        const to = new Date(), from = new Date();
+                        from.setDate(from.getDate() - 6);
+                        setExportFrom(from.toISOString().split('T')[0]);
+                        setExportTo(to.toISOString().split('T')[0]);
+                      }
+                    },
+                  ].map(btn => (
+                    <button key={btn.label} onClick={btn.fn}
+                      className="px-3 py-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors">
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button onClick={exportCalendarPDF} disabled={isExporting || !exportFrom || !exportTo}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+                  {isExporting ? 'Se genereaza...' : 'Exporta PDF'}
+                </button>
+              </div>
             </div>
           </div>
         )}
